@@ -1,0 +1,50 @@
+@font-face {
+    font-family: "CourierNew";
+    src: url("../fonts/couriercyrps.woff2") format("woff2");
+}
+@font-face {
+    font-family: "HelveticaNeue";
+    src: url("../fonts/helveticaneuecyr-roman.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Garamond";
+    src: url("../fonts/cormorantgaramond-semibolditalic.woff2") format("woff2");
+}
+.woocommerce-additional-fields__field-wrapper {margin-top: 16px}
+.woocommerce-MyAccount-navigation-link--downloads {display: none}
+
+.woocommerce-Price-amount {
+    font-family: "HelveticaNeue";
+}
+
+.uk-heading-medium .uk-font-secondary {
+    font-size: 2.5rem;
+}
+.uk-heading-small .uk-font-secondary {
+    font-size: 2.3rem;
+}
+@media (min-width: 960px) {
+    .uk-heading-medium .uk-font-secondary {
+        font-size: 4.5rem;
+    }
+    .uk-heading-small .uk-font-secondary {
+        font-size: 3.725rem;
+    }
+}
+@media (min-width: 1200px) {
+    .uk-heading-medium .uk-font-secondary  {
+        font-size:5.275rem
+    }
+    .uk-heading-small .uk-font-secondary  {
+        font-size:3.85rem
+    }
+}
+
+@media screen and (max-width: 640px) {
+    html {
+        font-size: 14px
+    }
+    .uk-heading-medium, .uk-heading-small {
+        line-height: 1
+    }
+}
