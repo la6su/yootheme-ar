@@ -25,7 +25,7 @@ async function initThreePreview() {
 
     engine = await createEngine({
         container,
-        modelUrl: "/assets/gltf/tv-last-transformed.glb",
+        modelUrl: "/arjs/gltf/tv.glb",
         media: {
             type,
             url: window.AR_PREVIEW.url
