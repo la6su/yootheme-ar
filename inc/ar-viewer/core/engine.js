@@ -89,7 +89,7 @@ export async function createEngine({
 
     try {
         const hdr = await new RGBELoader()
-            .setPath('/assets/textures/equirectangular/')
+            .setPath('/arjs/three-js/examples/jsm/textures/equirectangular/')
             .loadAsync('venice_sunset_1k.hdr');
 
         hdr.mapping = THREE.EquirectangularReflectionMapping;

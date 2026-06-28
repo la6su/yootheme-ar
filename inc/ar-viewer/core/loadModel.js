@@ -8,7 +8,7 @@ export async function loadModel(url) {
 
     const loader = new GLTFLoader();
     const draco = new DRACOLoader();
-    draco.setDecoderPath('/assets/libs/draco/');
+    draco.setDecoderPath('/arjs/three-js/examples/jsm/libs/draco/');
     loader.setDRACOLoader(draco);
 
     const gltf = await loader.loadAsync(url);
