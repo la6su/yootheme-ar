@@ -43,12 +43,20 @@ add_filter('woocommerce_checkout_fields', function($fields) {
 
     // Удаляем лишние поля
     unset($fields['billing']['billing_state']);
-    unset($fields['billing']['billing_country']);
     unset($fields['billing']['billing_postcode']);
     
-    unset($fields['shipping']['shipping_country']);
     unset($fields['shipping']['shipping_state']);
     unset($fields['shipping']['shipping_postcode']);
+
+    // WooCommerce requires a shipping country during final validation even
+    // when the storefront only delivers within one country. Keep it in the
+    // submitted form without showing a redundant selector to the customer.
+    foreach (['billing', 'shipping'] as $address_type) {
+        $country_key = $address_type . '_country';
+        $fields[$address_type][$country_key]['type'] = 'hidden';
+        $fields[$address_type][$country_key]['default'] = 'RU';
+        $fields[$address_type][$country_key]['required'] = true;
+    }
 
     // Добавляем зону доставки
     $fields['billing']['delivery_zone'] = [
@@ -118,6 +126,18 @@ add_action('woocommerce_checkout_create_order', function($order, $data) {
     }
 
 }, 10, 2);
+
+// Do not let a stale customer session or a custom checkout refresh erase the
+// single allowed country before WooCommerce validates the order.
+add_filter('woocommerce_checkout_get_value', function($value, $input) {
+    return in_array($input, ['billing_country', 'shipping_country'], true) ? 'RU' : $value;
+}, 20, 2);
+
+add_filter('woocommerce_checkout_posted_data', function(array $data): array {
+    $data['billing_country'] = 'RU';
+    $data['shipping_country'] = 'RU';
+    return $data;
+});
 
 // =========================
 // SHOW IN ADMIN
