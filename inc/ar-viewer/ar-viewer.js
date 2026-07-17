@@ -1,4 +1,4 @@
-import { createEngine } from './core/engine.js';
+import { createMindarViewer } from './modes/mindarViewer.js';
 
 const startButton = document.getElementById('start-btn');
 const overlay = document.getElementById('start-overlay');
@@ -22,11 +22,10 @@ async function prepareViewer() {
         return;
     }
 
-    engine = await createEngine({
+    engine = await createMindarViewer({
         container,
         modelUrl: config.model,
         media: config.media,
-        mode: 'mindar',
         mindar: { target: config.target },
         assets: config.assets,
         animation: config.animation,

@@ -48,17 +48,37 @@ function mospal_subscription_plan_for_product($product): ?array {
         return null;
     }
 
-    $sku = (string) $product->get_sku();
+    $sku = strtoupper(trim((string) $product->get_sku()));
     $plans = mospal_subscription_plans();
 
-    if (!isset($plans[$sku])) {
-        return null;
+    if (isset($plans[$sku])) {
+        return $plans[$sku] + [
+            'sku' => $sku,
+            'product_id' => $product->get_id(),
+        ];
     }
 
-    return $plans[$sku] + [
-        'sku' => $sku,
-        'product_id' => $product->get_id(),
-    ];
+    // Products may already exist without the recommended SKU. Keep checkout
+    // functional by matching the four fixed public plan names as a fallback.
+    $product_name = mospal_subscription_normalize_name($product->get_name());
+    foreach ($plans as $plan_sku => $plan) {
+        $plan_name = mospal_subscription_normalize_name($plan['name']);
+        if ($product_name === $plan_name || strpos($product_name, $plan_name) !== false) {
+            return $plan + [
+                'sku' => $plan_sku,
+                'product_id' => $product->get_id(),
+            ];
+        }
+    }
+
+    return null;
+}
+
+function mospal_subscription_normalize_name(string $name): string {
+    $name = html_entity_decode(wp_strip_all_tags($name), ENT_QUOTES, get_bloginfo('charset') ?: 'UTF-8');
+    $name = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    $name = trim($name, " \t\n\r\0\x0B«»\"'“”");
+    return (string) preg_replace('/\s+/u', ' ', $name);
 }
 
 /** Keep the billing period clear while products remain standard Woo products. */

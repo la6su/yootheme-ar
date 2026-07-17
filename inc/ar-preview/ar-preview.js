@@ -1,4 +1,4 @@
-import { createEngine } from '../ar-viewer/core/engine.js';
+import { createStandardPreview } from '../ar-viewer/modes/standardPreview.js';
 
 let engine = null;
 let resizeHandler = null;
@@ -18,14 +18,13 @@ async function initThreePreview() {
     if (!container || !config || !preview) return;
 
     container.innerHTML = '';
-    engine = await createEngine({
+    engine = await createStandardPreview({
         container,
         modelUrl: config.model,
         media: {
             type: preview.type.includes('video') ? 'video' : 'image',
             url: preview.url,
         },
-        mode: 'preview',
         assets: config.assets,
         animation: config.animation,
     });

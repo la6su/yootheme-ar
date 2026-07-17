@@ -109,8 +109,8 @@
 
         <!-- STEP 2: AR -->
         <li>
-            <?php if (function_exists('ar_render_checkout')) {
-                ar_render_checkout();
+            <?php if (function_exists('mospal_greeting_render_checkout')) {
+                mospal_greeting_render_checkout();
             } ?>
 
             <div class="uk-margin-medium-top">

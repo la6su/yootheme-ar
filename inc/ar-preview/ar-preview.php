@@ -97,9 +97,10 @@ function mospal_greeting_render_checkout(): void {
 }
 
 add_action('woocommerce_after_checkout_validation', function (array $data, WP_Error $errors) {
-    if (empty($data['ar_active'])) return;
+    $greeting_data = mospal_greeting_extract_checkout_data();
+    if (empty($greeting_data['ar_active'])) return;
 
-    $attachment_id = isset($data['ar_attachment_id']) ? absint($data['ar_attachment_id']) : 0;
+    $attachment_id = isset($greeting_data['ar_attachment_id']) ? absint($greeting_data['ar_attachment_id']) : 0;
     if (!$attachment_id || !mospal_greeting_attachment_belongs_to_session($attachment_id)) {
         $errors->add('mospal_greeting_upload', 'Загрузите файл AR-открытки ещё раз перед оформлением заказа.');
     }
