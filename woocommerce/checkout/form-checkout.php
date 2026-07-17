@@ -70,31 +70,31 @@
                 <?php wc_cart_totals_shipping_html(); ?>
             </div>
             
-            <div uk-grid>
+            <?php if (function_exists('mospal_is_subscription_cart') && mospal_is_subscription_cart()) : ?>
+                <?php do_action('mospal_checkout_subscription_fields'); ?>
+            <?php else : ?>
+                <div uk-grid>
+                    <div>
+                        <div class="uk-inline uk-width-medium">
+                            <span class="uk-form-icon uk-form-icon-flip" uk-icon="icon: calendar"></span>
+                            <input type="text"
+                               placeholder="Дата доставки"
+                               name="delivery_date"
+                               id="delivery_date"
+                               class="uk-input validate-required">
+                        </div>
+                    </div>
 
-                <!-- DELIVERY DATE -->
-                <div>
-                    <div class="uk-inline uk-width-medium">
-                        <span class="uk-form-icon uk-form-icon-flip" uk-icon="icon: calendar"></span>
-                        <input type="text"
-                           placeholder="Дата доставки"
-                           name="delivery_date"
-                           id="delivery_date"
-                           class="uk-input validate-required">
+                    <div class="uk-width-medium">
+                        <select name="delivery_time" class="uk-select validate-required">
+                            <option value="">Время доставки</option>
+                            <option value="10-14">10:00 – 14:00</option>
+                            <option value="14-18">14:00 – 18:00</option>
+                            <option value="18-21">18:00 – 21:00</option>
+                        </select>
                     </div>
                 </div>
-    
-                <!-- DELIVERY TIME -->
-                <div class="uk-width-medium">
-                    <select name="delivery_time" class="uk-select validate-required">
-                        <option value="">Время доставки</option>
-                        <option value="10-14">10:00 – 14:00</option>
-                        <option value="14-18">14:00 – 18:00</option>
-                        <option value="18-21">18:00 – 21:00</option>
-                    </select>
-                </div>
-                
-            </div>
+            <?php endif; ?>
             
             <div class="uk-margin-medium-top">
                 <button type="button" class="uk-button uk-button-default" data-prev>
@@ -239,7 +239,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (step === 1) {
             inputs = document.querySelectorAll(
-                '[name^="shipping_"], [name="delivery_date"], [name="delivery_time"]'
+                '[name^="shipping_"], [name="delivery_date"], [name="delivery_time"], [name^="mospal_subscription_"]'
             );
         }
 
@@ -299,10 +299,15 @@ document.addEventListener("DOMContentLoaded", function () {
     // =========================
 
     if (typeof flatpickr !== "undefined") {
-        flatpickr("#delivery_date", {
-            locale: "ru",
-            dateFormat: "Y-m-d",
-            minDate: "today"
+        ["#delivery_date", "#mospal_subscription_first_delivery_date"].forEach(function(selector) {
+            if (document.querySelector(selector)) {
+                flatpickr(selector, { locale: "ru", dateFormat: "Y-m-d", minDate: "today" });
+            }
+        });
+        ["#mospal_subscription_birthday", "#mospal_subscription_anniversary"].forEach(function(selector) {
+            if (document.querySelector(selector)) {
+                flatpickr(selector, { locale: "ru", dateFormat: "Y-m-d", maxDate: "today" });
+            }
         });
     }
 

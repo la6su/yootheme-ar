@@ -2,6 +2,8 @@
 
 add_action('wp_enqueue_scripts', function() {
 
+    if (!is_checkout() || is_admin()) return;
+
     // CSS
     wp_enqueue_style(
         'flatpickr-css',
@@ -30,22 +32,22 @@ add_action('wp_enqueue_scripts', function() {
 
 }, 20);
 
-add_action('woocommerce_checkout_update_order_meta', function($order_id){
+add_action('woocommerce_checkout_create_order', function(WC_Order $order, array $data) {
 
-    if (!empty($_POST['delivery_date'])) {
-        update_post_meta($order_id, '_delivery_date', sanitize_text_field($_POST['delivery_date']));
+    if (!empty($data['delivery_date'])) {
+        $order->update_meta_data('_delivery_date', sanitize_text_field($data['delivery_date']));
     }
 
-    if (!empty($_POST['delivery_time'])) {
-        update_post_meta($order_id, '_delivery_time', sanitize_text_field($_POST['delivery_time']));
+    if (!empty($data['delivery_time'])) {
+        $order->update_meta_data('_delivery_time', sanitize_text_field($data['delivery_time']));
     }
 
-});
+}, 20, 2);
 
 add_action('woocommerce_admin_order_data_after_order_details', function($order){
 
-    $date = get_post_meta($order->get_id(), '_delivery_date', true);
-    $time = get_post_meta($order->get_id(), '_delivery_time', true);
+    $date = $order->get_meta('_delivery_date');
+    $time = $order->get_meta('_delivery_time');
 
     if (!$date && !$time) return;
 
@@ -67,8 +69,11 @@ add_action('woocommerce_thankyou', function($order_id){
 
     if (!$order_id) return;
 
-    $date = get_post_meta($order_id, '_delivery_date', true);
-    $time = get_post_meta($order_id, '_delivery_time', true);
+    $order = wc_get_order($order_id);
+    if (!$order) return;
+
+    $date = $order->get_meta('_delivery_date');
+    $time = $order->get_meta('_delivery_time');
 
     if (!$date && !$time) return;
 

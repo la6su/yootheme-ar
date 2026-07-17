@@ -1,205 +1,81 @@
-# YOOtheme AR – WooCommerce Custom Checkout
+# YOOtheme AR — checkout и AR-открытки для Mospal
 
-Кастомная реализация checkout + AR-превью и AR-открыток для WooCommerce.
+Дочерняя тема YOOtheme Pro для `mospal.ru`. В ней находятся интерфейс checkout и AR-открытки; стандартные механики WooCommerce и YOOtheme не изменяются.
 
-Проект реализует:
-- multi-step checkout (UIkit)
-- загрузку AR контента (изображение / видео)
-- QR-код на открытку
-- сохранение в заказе
-- AR viewer (MindAR + Three.js)
+## Что реализовано
 
----
+- многошаговый checkout на UIkit;
+- загрузка персонального изображения или видео к заказу;
+- isolated media storage: `wp-content/uploads/greetings/YYYY/MM/`;
+- случайные имена файлов, привязка к сессии checkout и заказу;
+- автоматическая очистка: брошенная загрузка через 48 часов, оплаченная открытка через 30 дней после доставки;
+- 3D preview в checkout и MindAR viewer используют один Three.js runtime;
+- GLTF animation: первый клип запускается один раз в preview и один раз при первой находке маркера. Потеря маркера не останавливает клип; при следующей находке видна финальная поза;
+- публичная AR-ссылка использует случайный токен, а не номер заказа.
+- бесплатный модуль цветочных подписок на обычных WooCommerce-товарах: персональные настройки, график доставок, пауза и ручное продление через обычный заказ.
 
-## Структура проекта
+## Структура
 
-```
-wp-content/themes/yootheme-ar/
-│
-├── functions.php
-│
-├── inc/
-│   ├── checkout/
-│   │   ├── woocommerce-checkout.php   # Основная логика checkout (PHP)
-│   │   ├── checkout-ar-ui.js          # UI логика AR (JS)
-│   │   ├── delivery.php               # Дата/время доставки
-│   │   └── libs/
-│   │       └── flatpickr/             # Datepicker
-│   │
-│   ├── ar-preview/
-│   │   ├── ar-preview.php             # AR backend + AJAX
-│   │   └── ar-preview.js              # Preview логика (если используется)
-│   │
-│   ├── ar-viewer/ (рекомендуется)
-│   │   ├── ar-viewer.js               # MindAR + Three.js viewer
-│   │   └── shaders.js                # Shader код
-│   │
-│   └── ...
-│
-├── woocommerce/
-│   └── checkout/
-│       └── form-checkout.php          # Кастомный checkout шаблон
-│
-├── ar-card.php                        # AR viewer страница
-│
-└── style.css
+```text
+inc/
+├── greetings/greetings.php       # upload, retention, tokens, order binding
+├── ar-preview/                   # checkout UI + standard Three.js preview
+├── ar-viewer/
+│   ├── ar-viewer.js              # MindAR page entrypoint
+│   ├── core/                     # shared model/media/animation lifecycle
+│   └── modes/                    # standardPreview + mindarViewer
+├── subscriptions/subscriptions.php # subscription preferences, delivery schedule, renewals
+└── checkout/                     # delivery fields and checkout UI
+ar-card.php                       # minimal AR page template
 ```
 
----
+`src/js/three/` is an old experimental refactor and is not loaded by WordPress. The canonical runtime is `inc/ar-viewer/`; new changes must go there until a real build pipeline is introduced.
 
-## Архитектура
+## Подписка на цветы
 
-Проект разделён на 3 основных слоя:
+Подписки не требуют платного WooCommerce Subscriptions. Обычные товары определяются по SKU: `SUB-BUD-M`, `SUB-BAZ-M`, `SUB-SEZ-Y`, `SUB-MAG-Y`. Убедитесь, что эти артикулы указаны у четырёх тарифов.
 
-### 1. Checkout (PHP + JS)
-```
-inc/checkout/
-```
+В checkout показываются только нужные тарифу данные: стиль и первая дата для ежемесячных/еженедельных букетов; даты рождения и годовщины — только для «Праздничной магии». После первой оплаченной покупки создаются отдельные записи подписки и будущих доставок в меню WooCommerce. Следующее продление создаёт обычный ожидающий оплаты заказ и отправляет покупателю ссылку на оплату. Это совместимо с PayKeeper; автоматическое повторное списание можно добавить позднее, не меняя данные подписок.
 
-Отвечает за:
-- поля checkout
-- валидацию
-- UI (JS)
-- стоимость доставки
-- сохранение данных
+Клиент управляет паузой из «Мой аккаунт → Подписки на цветы». Для появления нового пункта меню после развёртывания один раз сохраните постоянные ссылки в `Настройки → Постоянные ссылки`.
 
----
+## Требования к GLB
 
-### 2. AR Upload Module
-```
-inc/ar-preview/
-```
-
-Отвечает за:
-- загрузку файлов (AJAX)
-- валидацию
-- сохранение attachment ID
-- связь с заказом
-
----
-
-### 3. AR Viewer
-```
-ar-card.php
-```
-
-Отвечает за:
-- отображение AR
-- MindAR
-- Three.js сцена
-- воспроизведение контента
-
----
-
-## Жизненный цикл
-
-1. Пользователь оформляет заказ
-2. Загружает AR контент
-3. WooCommerce создаёт заказ
-4. Данные сохраняются в meta
-5. Генерируется AR ссылка
-6. Пользователь открывает ar-card.php?id=ORDER_ID
-
----
-
-## Данные заказа
-
-### Meta поля:
-
-| Поле | Описание |
-|------|--------|
-| _delivery_date | Дата доставки |
-| _delivery_time | Время доставки |
-| Зона доставки | MKAD / OUT_MKAD |
-| AR_ATTACHMENT_ID | ID загруженного файла |
-
----
-
-## Подключение модулей
-
-В functions.php:
+- mesh экрана должен называться `Screen` (регистр не важен);
+- анимации должны быть экспортированы внутрь GLB как glTF clips;
+- первый clip используется автоматически;
+- для выбора конкретного клипа добавьте в дочернюю тему или mini-plugin:
 
 ```php
-require_once get_stylesheet_directory() . '/inc/core/loader.php';
+add_filter('mospal_greeting_animation_clip', fn () => 'OpenTV');
+add_filter('mospal_greeting_animation_loop', fn () => 'once');
 ```
 
----
+Для новой модели можно заменить путь без редактирования runtime:
 
-## Важные моменты
-
-### 1. WooCommerce AJAX
-Используется:
-```
-updated_checkout
+```php
+add_filter('mospal_greeting_model_url', fn () => '/arjs/gltf/tv-animated.glb');
 ```
 
-### 2. JS инициализация
-Используется защита:
-```
-dataset.bound
-```
+## Хранение greeting-файлов
 
----
+Новые загрузки проходят через `mospal_greeting_upload` и получают мета-признаки `_mospal_greeting`, сессионный токен и время удаления. Attachment нельзя подставить из другого checkout.
 
-## TODO / ROADMAP
-### 0. Вынести ленивую загрузку three.js и ассетов
-- [ ] Загружать сначала страницу checkout а потом лениво three.js и ассеты
+Фоновая задача `mospal_greeting_cleanup_expired` запускается раз в сутки через Action Scheduler; если он недоступен, используется WP-Cron. На production для точного расписания нужен системный cron, вызывающий WordPress cron регулярно.
 
-### 1. AR как продукт
+## AR-ссылка и QR
 
-- [ ] Добавить upsell:
-  "Добавить AR поздравление +500₽"
-- [ ] Toggle включения AR
-- [ ] Динамическая цена
-- [ ] Отображение в корзине
+После создания заказа генерируется `_mospal_greeting_token`. Получить безопасный URL можно так:
 
----
-
-### 2. Личный кабинет
-
-- [ ] Раздел "Мои AR открытки"
-- [ ] Список заказов с AR
-- [ ] Быстрый доступ к viewer
-- [ ] Возможность повторного открытия
-
----
-
-### 3. Архитектурный апгрейд ar-card.php
-
-Текущая проблема:
-- слишком большой файл
-- смешаны PHP + HTML + JS
-
-Решение:
-
-```
-inc/ar-viewer/
+```php
+$url = mospal_greeting_viewer_url($order);
 ```
 
-Вынести:
-- JS → ar-viewer.js
-- shaders → shaders.js
+Он имеет вид `/ar-card/?token=...` и готов для QR-кода. Старый запрос по ID доступен только менеджеру WooCommerce.
 
-В ar-card.php оставить:
-- только PHP + HTML
-- CONFIG
-- подключение JS
+## Форматы
 
----
+- изображения: JPG, PNG, до 10 МБ;
+- видео: MP4, MOV, до 50 МБ.
 
-## Принципы проекта
-
-- модульность
-- разделение ответственности
-- минимальная связность
-- устойчивость к AJAX
-
----
-
-## Итог
-
-Проект уже является:
-- кастомным checkout решением
-- AR системой и QR-кодом на открытку
-- базой для коммерческого продукта
-
+Для максимальной совместимости мобильных браузеров предпочтителен MP4 с H.264/AAC. MOV не перекодируется автоматически.

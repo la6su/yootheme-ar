@@ -1,80 +1,69 @@
-// inc/ar-preview/ar-preview.js
-
-import { createEngine } from "../ar-viewer/core/engine.js";
-
-// ============================
-// STATE
-// ============================
+import { createEngine } from '../ar-viewer/core/engine.js';
 
 let engine = null;
-let initialized = false;
-
 let resizeHandler = null;
-// ============================
-// INIT
-// ============================
+
+function setPreviewError(message) {
+    const container = document.getElementById('ar_preview_container');
+    if (container) {
+        container.innerHTML = `<p class="uk-text-danger uk-text-center uk-padding">${message}</p>`;
+    }
+}
 
 async function initThreePreview() {
+    const container = document.getElementById('ar_preview_container');
+    const config = window.MOSPAL_AR_CONFIG;
+    const preview = window.AR_PREVIEW;
 
-    const container = document.getElementById("ar_preview_container");
-    if (!container || !window.AR_PREVIEW) return;
+    if (!container || !config || !preview) return;
 
-    container.innerHTML = "";
-
-    const type = window.AR_PREVIEW.type.includes("video") ? "video" : "image";
-
+    container.innerHTML = '';
     engine = await createEngine({
         container,
-        modelUrl: "/arjs/gltf/tv.glb",
+        modelUrl: config.model,
         media: {
-            type,
-            url: window.AR_PREVIEW.url
+            type: preview.type.includes('video') ? 'video' : 'image',
+            url: preview.url,
         },
-        mode: "preview"
+        mode: 'preview',
+        assets: config.assets,
+        animation: config.animation,
     });
 
     engine.start();
     resizeHandler = engine.resize;
-    window.addEventListener("resize", resizeHandler);
+    window.addEventListener('resize', resizeHandler);
 }
 
-// ============================
-// DESTROY
-// ============================
-
 function destroyThreePreview() {
+    window.removeEventListener('resize', resizeHandler);
+    resizeHandler = null;
 
     if (engine) {
         engine.destroy();
         engine = null;
     }
 
-    window.removeEventListener("resize", engine?.resize);
-
-    const container = document.getElementById("ar_preview_container");
-    if (container) container.innerHTML = "";
+    const container = document.getElementById('ar_preview_container');
+    if (container) container.innerHTML = '';
 }
 
-// ============================
-// UIKIT EVENTS
-// ============================
+if (window.UIkit) {
+    UIkit.util.on('#ar_modal', 'shown', () => {
+        window.setTimeout(async () => {
+            if (engine) {
+                engine.resize();
+                return;
+            }
 
-UIkit.util.on("#ar_modal", "shown", () => {
+            try {
+                await initThreePreview();
+            } catch (error) {
+                console.error('AR preview could not be started.', error);
+                setPreviewError('Не удалось открыть 3D-предпросмотр. Попробуйте ещё раз.');
+            }
+        }, 50);
+    });
 
-    setTimeout(async () => {
-
-        if (!initialized) {
-            await initThreePreview();
-            initialized = true;
-        }
-
-        if (engine) engine.resize();
-
-    }, 50);
-});
-
-UIkit.util.on("#ar_modal", "hidden", () => {
-
-    destroyThreePreview();
-    initialized = false;
-});
+    UIkit.util.on('#ar_modal', 'hidden', destroyThreePreview);
+}

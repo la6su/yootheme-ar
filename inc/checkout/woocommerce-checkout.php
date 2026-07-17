@@ -10,21 +10,15 @@
 
 add_action('wp_enqueue_scripts', function () {
 
-    if (!is_checkout()) return;
+    if (!is_checkout() || is_admin()) return;
 
     wp_enqueue_script(
         'checkout-ar-ui',
         get_stylesheet_directory_uri() . '/inc/checkout/checkout-ar-ui.js',
-        [],
-        '1.0',
+        ['jquery'],
+        filemtime(get_stylesheet_directory() . '/inc/checkout/checkout-ar-ui.js'),
         true
     );
-
-    // ВАЖНО: локализация к ЭТОМУ скрипту
-    wp_localize_script('checkout-ar-ui', 'AR_CONFIG', [
-        'ajax'  => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('ar_upload_nonce')
-    ]);
 
 }, 30);
 
