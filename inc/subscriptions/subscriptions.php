@@ -139,6 +139,45 @@ function mospal_is_subscription_cart(): bool {
     return (bool) mospal_subscription_cart_plan();
 }
 
+function mospal_subscription_keep_only_cart_item(string $keep_key): void {
+    if (!function_exists('WC') || !WC()->cart) {
+        return;
+    }
+    foreach (WC()->cart->get_cart() as $key => $item) {
+        if ($key !== $keep_key && mospal_subscription_plan_for_product($item['data'] ?? null)) {
+            WC()->cart->remove_cart_item($key);
+        }
+    }
+}
+
+/** A newly selected plan replaces any older flower plan in the cart. */
+add_action('woocommerce_add_to_cart', function (string $cart_item_key): void {
+    if (!function_exists('WC') || !WC()->cart) {
+        return;
+    }
+
+    $added_item = WC()->cart->get_cart_item($cart_item_key);
+    $added_plan = mospal_subscription_plan_for_product($added_item['data'] ?? null);
+    if (!$added_plan) {
+        return;
+    }
+
+    mospal_subscription_keep_only_cart_item($cart_item_key);
+}, 20, 1);
+
+/** Repair carts saved before the one-plan rule was introduced. */
+add_action('woocommerce_cart_loaded_from_session', function (WC_Cart $cart): void {
+    $subscription_keys = [];
+    foreach ($cart->get_cart() as $key => $item) {
+        if (mospal_subscription_plan_for_product($item['data'] ?? null)) {
+            $subscription_keys[] = $key;
+        }
+    }
+    if (count($subscription_keys) > 1) {
+        mospal_subscription_keep_only_cart_item((string) end($subscription_keys));
+    }
+}, 20);
+
 function mospal_subscription_styles(): array {
     return [
         'minimalism' => 'Минимализм',
@@ -164,6 +203,82 @@ function mospal_subscription_checkout_value(string $key): string {
     return '';
 }
 
+function mospal_subscription_next_fixed_date(int $month, int $day): string {
+    $today = new DateTimeImmutable('today', wp_timezone());
+    $date = $today->setDate((int) $today->format('Y'), $month, $day);
+    if ($date < $today) {
+        $date = $date->modify('+1 year');
+    }
+    return $date->format('Y-m-d');
+}
+
+function mospal_subscription_next_easter_date(): string {
+    $today = new DateTimeImmutable('today', wp_timezone());
+    $date = mospal_subscription_orthodox_easter((int) $today->format('Y'));
+    if ($date < $today) {
+        $date = mospal_subscription_orthodox_easter((int) $today->format('Y') + 1);
+    }
+    return $date->format('Y-m-d');
+}
+
+function mospal_subscription_schedule_template(array $plan): array {
+    if ($plan['deliveries'] === 'holidays') {
+        return [
+            ['kind' => 'valentine', 'label' => '14 февраля', 'date' => mospal_subscription_next_fixed_date(2, 14), 'fixed' => true],
+            ['kind' => 'march-8', 'label' => '8 марта', 'date' => mospal_subscription_next_fixed_date(3, 8), 'fixed' => true],
+            ['kind' => 'easter', 'label' => 'Пасха', 'date' => mospal_subscription_next_easter_date(), 'fixed' => true],
+            ['kind' => 'birthday', 'label' => 'День рождения', 'date' => '', 'fixed' => false],
+            ['kind' => 'new-year', 'label' => 'Новый год', 'date' => mospal_subscription_next_fixed_date(12, 31), 'fixed' => true],
+            ['kind' => 'anniversary', 'label' => 'Важная дата / годовщина', 'date' => '', 'fixed' => false],
+        ];
+    }
+
+    $count = 1;
+    $unit = 'month';
+    $step = 1;
+    $kind = 'monthly';
+    if ($plan['deliveries'] === 'weekly-four') {
+        $count = 4;
+        $unit = 'day';
+        $step = 7;
+        $kind = 'weekly';
+    } elseif ($plan['deliveries'] === 'monthly-twelve') {
+        $count = 12;
+        $kind = 'seasonal';
+    }
+
+    $schedule = [];
+    for ($i = 0; $i < $count; $i++) {
+        $schedule[] = [
+            'kind' => $kind . '-' . ($i + 1),
+            'label' => $count === 1 ? 'Доставка' : 'Доставка ' . ($i + 1),
+            'date' => '',
+            'fixed' => false,
+            'offset' => $i * $step,
+            'unit' => $unit,
+        ];
+    }
+    return $schedule;
+}
+
+function mospal_subscription_posted_schedule(array $plan): array {
+    $template = mospal_subscription_schedule_template($plan);
+    $raw = isset($_POST['mospal_subscription_schedule']) && is_array($_POST['mospal_subscription_schedule'])
+        ? wp_unslash($_POST['mospal_subscription_schedule'])
+        : [];
+
+    foreach ($template as $index => &$delivery) {
+        $posted = isset($raw[$index]) && is_array($raw[$index]) ? $raw[$index] : [];
+        if (empty($delivery['fixed'])) {
+            $delivery['date'] = sanitize_text_field($posted['date'] ?? $delivery['date']);
+        }
+        $delivery['time'] = sanitize_text_field($posted['time'] ?? '');
+    }
+    unset($delivery);
+
+    return $template;
+}
+
 /** Render only the preferences needed by the selected plan. */
 function mospal_subscription_render_checkout_fields(): void {
     $plan = mospal_subscription_cart_plan();
@@ -172,10 +287,7 @@ function mospal_subscription_render_checkout_fields(): void {
     }
 
     $style = mospal_subscription_checkout_value('mospal_subscription_style');
-    $time = mospal_subscription_checkout_value('mospal_subscription_delivery_time');
-    $first_date = mospal_subscription_checkout_value('mospal_subscription_first_delivery_date');
-    $birthday = mospal_subscription_checkout_value('mospal_subscription_birthday');
-    $anniversary = mospal_subscription_checkout_value('mospal_subscription_anniversary');
+    $schedule = mospal_subscription_posted_schedule($plan);
     ?>
     <section class="uk-card uk-card-default uk-card-small uk-padding-small uk-margin-bottom" aria-labelledby="mospal-subscription-title">
         <h3 id="mospal-subscription-title" class="uk-card-title uk-margin-small-bottom">
@@ -184,11 +296,11 @@ function mospal_subscription_render_checkout_fields(): void {
 
         <div class="uk-margin-small-bottom uk-text-meta">
             <?php if ($plan['deliveries'] === 'weekly-four') : ?>
-                Четыре доставки: первая дата задаёт день недели для букета.
+                Четыре еженедельные доставки. Выбери первую дату — остальные заполнятся автоматически, но их можно изменить.
             <?php elseif ($plan['deliveries'] === 'monthly-twelve') : ?>
-                Двенадцать сезонных доставок в течение года.
+                Двенадцать сезонных доставок. Даты заполнятся от первой и останутся доступными для изменения.
             <?php elseif ($plan['deliveries'] === 'holidays') : ?>
-                Доставим букеты к важным датам — укажи персональные праздники.
+                Шесть праздничных доставок с отдельными датами и интервалами.
             <?php else : ?>
                 Один свежий букет каждый месяц.
             <?php endif; ?>
@@ -204,41 +316,44 @@ function mospal_subscription_render_checkout_fields(): void {
             </select>
         </div>
 
-        <?php if ($plan['deliveries'] !== 'holidays') : ?>
-            <div class="uk-grid-small" uk-grid>
-                <div class="uk-width-1-2@s form-row validate-required">
-                    <label class="uk-form-label" for="mospal_subscription_first_delivery_date">Первая доставка</label>
-                    <input type="text" id="mospal_subscription_first_delivery_date" name="mospal_subscription_first_delivery_date" value="<?php echo esc_attr($first_date); ?>" placeholder="Дата доставки" class="uk-input validate-required">
+        <div class="mospal-subscription-schedule uk-margin-top">
+            <?php foreach ($schedule as $index => $delivery) : ?>
+                <?php $date_id = 'mospal_subscription_delivery_' . $index . '_date'; ?>
+                <div class="uk-card uk-card-default uk-card-small uk-card-body uk-margin-small-bottom">
+                    <h4 class="uk-margin-small-bottom"><?php echo esc_html($delivery['label']); ?></h4>
+                    <div class="uk-grid-small" uk-grid>
+                        <div class="uk-width-1-2@s form-row validate-required">
+                            <label class="uk-form-label" for="<?php echo esc_attr($date_id); ?>">Дата</label>
+                            <input
+                                type="text"
+                                id="<?php echo esc_attr($date_id); ?>"
+                                name="mospal_subscription_schedule[<?php echo esc_attr($index); ?>][date]"
+                                value="<?php echo esc_attr($delivery['date']); ?>"
+                                class="uk-input validate-required"
+                                placeholder="Дата доставки"
+                                data-mospal-delivery-date
+                                data-offset="<?php echo esc_attr($delivery['offset'] ?? 0); ?>"
+                                data-offset-unit="<?php echo esc_attr($delivery['unit'] ?? 'day'); ?>"
+                                <?php echo !empty($delivery['fixed']) ? 'readonly data-fixed="1"' : ''; ?>
+                            >
+                        </div>
+                        <div class="uk-width-1-2@s form-row validate-required">
+                            <label class="uk-form-label" for="mospal_subscription_delivery_<?php echo esc_attr($index); ?>_time">Интервал</label>
+                            <select
+                                id="mospal_subscription_delivery_<?php echo esc_attr($index); ?>_time"
+                                name="mospal_subscription_schedule[<?php echo esc_attr($index); ?>][time]"
+                                class="uk-select validate-required"
+                                data-mospal-delivery-time
+                            >
+                                <?php foreach (mospal_subscription_time_options() as $value => $label) : ?>
+                                    <option value="<?php echo esc_attr($value); ?>" <?php selected($delivery['time'], $value); ?>><?php echo esc_html($label); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="uk-width-1-2@s form-row validate-required">
-                    <label class="uk-form-label" for="mospal_subscription_delivery_time">Интервал</label>
-                    <select id="mospal_subscription_delivery_time" name="mospal_subscription_delivery_time" class="uk-select validate-required">
-                        <?php foreach (mospal_subscription_time_options() as $value => $label) : ?>
-                            <option value="<?php echo esc_attr($value); ?>" <?php selected($time, $value); ?>><?php echo esc_html($label); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
-        <?php else : ?>
-            <div class="uk-grid-small" uk-grid>
-                <div class="uk-width-1-2@s form-row validate-required">
-                    <label class="uk-form-label" for="mospal_subscription_birthday">Дата рождения получателя</label>
-                    <input type="text" id="mospal_subscription_birthday" name="mospal_subscription_birthday" value="<?php echo esc_attr($birthday); ?>" placeholder="Дата рождения" class="uk-input validate-required">
-                </div>
-                <div class="uk-width-1-2@s form-row validate-required">
-                    <label class="uk-form-label" for="mospal_subscription_anniversary">Важная дата / годовщина</label>
-                    <input type="text" id="mospal_subscription_anniversary" name="mospal_subscription_anniversary" value="<?php echo esc_attr($anniversary); ?>" placeholder="Дата годовщины" class="uk-input validate-required">
-                </div>
-            </div>
-            <div class="uk-margin-small-top form-row validate-required">
-                <label class="uk-form-label" for="mospal_subscription_delivery_time">Предпочтительный интервал</label>
-                <select id="mospal_subscription_delivery_time" name="mospal_subscription_delivery_time" class="uk-select validate-required">
-                    <?php foreach (mospal_subscription_time_options() as $value => $label) : ?>
-                        <option value="<?php echo esc_attr($value); ?>" <?php selected($time, $value); ?>><?php echo esc_html($label); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
     </section>
     <?php
 }
@@ -275,25 +390,25 @@ add_action('woocommerce_after_checkout_validation', function (array $data, WP_Er
     }
 
     $style = mospal_subscription_posted_value('mospal_subscription_style');
-    $time = mospal_subscription_posted_value('mospal_subscription_delivery_time');
     if (!isset(mospal_subscription_styles()[$style])) {
         $errors->add('mospal_subscription_style', 'Выберите стиль букета для подписки.');
     }
-    if (!isset(mospal_subscription_time_options()[$time]) || $time === '') {
-        $errors->add('mospal_subscription_time', 'Выберите предпочтительный интервал доставки.');
-    }
 
-    if ($plan['deliveries'] === 'holidays') {
-        foreach (['mospal_subscription_birthday' => 'дату рождения', 'mospal_subscription_anniversary' => 'важную дату'] as $key => $label) {
-            if (!mospal_subscription_valid_date(mospal_subscription_posted_value($key))) {
-                $errors->add($key, 'Укажите корректно ' . $label . '.');
-            }
+    $schedule = mospal_subscription_posted_schedule($plan);
+    $previous_date = null;
+    foreach ($schedule as $index => $delivery) {
+        if (!mospal_subscription_valid_date($delivery['date'], true)) {
+            $errors->add('mospal_subscription_delivery_date_' . $index, 'Укажите будущую дату для «' . $delivery['label'] . '».');
+            continue;
         }
-        return;
-    }
-
-    if (!mospal_subscription_valid_date(mospal_subscription_posted_value('mospal_subscription_first_delivery_date'), true)) {
-        $errors->add('mospal_subscription_first_delivery_date', 'Выберите будущую дату первой доставки.');
+        if (!isset(mospal_subscription_time_options()[$delivery['time']]) || $delivery['time'] === '') {
+            $errors->add('mospal_subscription_delivery_time_' . $index, 'Выберите интервал для «' . $delivery['label'] . '».');
+        }
+        $date = new DateTimeImmutable($delivery['date'], wp_timezone());
+        if ($plan['deliveries'] !== 'holidays' && $previous_date && $date <= $previous_date) {
+            $errors->add('mospal_subscription_delivery_order_' . $index, 'Даты доставок должны идти по порядку.');
+        }
+        $previous_date = $date;
     }
 }, 20, 2);
 
@@ -316,12 +431,17 @@ function mospal_subscription_save_order_preferences(WC_Order $order): void {
 
     $order->update_meta_data('_mospal_subscription_plan', $plan['sku']);
     $order->update_meta_data('_mospal_subscription_style', mospal_subscription_posted_value('mospal_subscription_style'));
-    $order->update_meta_data('_mospal_subscription_delivery_time', mospal_subscription_posted_value('mospal_subscription_delivery_time'));
-
-    foreach (['first_delivery_date', 'birthday', 'anniversary'] as $field) {
-        $value = mospal_subscription_posted_value('mospal_subscription_' . $field);
-        if ($value) {
-            $order->update_meta_data('_mospal_subscription_' . $field, $value);
+    $schedule = mospal_subscription_posted_schedule($plan);
+    $order->update_meta_data('_mospal_subscription_schedule', wp_json_encode($schedule, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    if (!empty($schedule[0]['time'])) {
+        $order->update_meta_data('_mospal_subscription_delivery_time', $schedule[0]['time']);
+    }
+    if ($plan['deliveries'] !== 'holidays' && !empty($schedule[0]['date'])) {
+        $order->update_meta_data('_mospal_subscription_first_delivery_date', $schedule[0]['date']);
+    }
+    foreach ($schedule as $delivery) {
+        if (in_array($delivery['kind'], ['birthday', 'anniversary'], true)) {
+            $order->update_meta_data('_mospal_subscription_' . $delivery['kind'], $delivery['date']);
         }
     }
 }
@@ -421,6 +541,36 @@ function mospal_subscription_personal_date(string $date, int $year): ?DateTimeIm
     return $parsed ? $parsed->setDate($year, (int) $parsed->format('m'), (int) $parsed->format('d')) : null;
 }
 
+function mospal_subscription_saved_schedule(int $subscription_id): array {
+    $json = mospal_subscription_meta($subscription_id, '_mospal_subscription_schedule');
+    $schedule = $json ? json_decode($json, true) : null;
+    return is_array($schedule) ? $schedule : [];
+}
+
+function mospal_subscription_shift_delivery_date(
+    array $delivery,
+    DateTimeImmutable $base_cycle,
+    DateTimeImmutable $target_cycle,
+    string $billing
+): ?DateTimeImmutable {
+    if (empty($delivery['date']) || !mospal_subscription_valid_date((string) $delivery['date'])) {
+        return null;
+    }
+
+    $date = new DateTimeImmutable((string) $delivery['date'], wp_timezone());
+    if ($billing === 'year') {
+        $years = (int) $target_cycle->format('Y') - (int) $base_cycle->format('Y');
+        if (($delivery['kind'] ?? '') === 'easter') {
+            return mospal_subscription_orthodox_easter((int) $date->format('Y') + $years);
+        }
+        return $years > 0 ? $date->modify('+' . $years . ' years') : $date;
+    }
+
+    $months = ((int) $target_cycle->format('Y') - (int) $base_cycle->format('Y')) * 12
+        + ((int) $target_cycle->format('n') - (int) $base_cycle->format('n'));
+    return $months > 0 ? $date->modify('+' . $months . ' months') : $date;
+}
+
 function mospal_subscription_create_cycle_deliveries(int $subscription_id, int $order_id, DateTimeImmutable $cycle_start): void {
     $sku = mospal_subscription_meta($subscription_id, '_mospal_subscription_plan');
     $plan = mospal_subscription_plans()[$sku] ?? null;
@@ -428,6 +578,25 @@ function mospal_subscription_create_cycle_deliveries(int $subscription_id, int $
         return;
     }
 
+    $schedule = mospal_subscription_saved_schedule($subscription_id);
+    if ($schedule) {
+        $base_cycle_value = mospal_subscription_meta($subscription_id, '_mospal_subscription_cycle_start');
+        $base_cycle = $base_cycle_value && mospal_subscription_valid_date($base_cycle_value)
+            ? new DateTimeImmutable($base_cycle_value, wp_timezone())
+            : $cycle_start;
+        foreach ($schedule as $delivery) {
+            $date = mospal_subscription_shift_delivery_date($delivery, $base_cycle, $cycle_start, $plan['billing']);
+            $time = sanitize_text_field((string) ($delivery['time'] ?? ''));
+            $kind = sanitize_key((string) ($delivery['kind'] ?? 'delivery'));
+            if ($date && $time) {
+                mospal_subscription_create_delivery($subscription_id, $order_id, $date, $time, $kind);
+            }
+        }
+        return;
+    }
+
+    // Backward-compatible fallback for subscriptions created before individual
+    // delivery dates were stored.
     $time = mospal_subscription_meta($subscription_id, '_mospal_subscription_delivery_time');
     if ($plan['deliveries'] === 'monthly') {
         mospal_subscription_create_delivery($subscription_id, $order_id, $cycle_start, $time, 'monthly');
@@ -540,6 +709,7 @@ function mospal_subscription_create_from_paid_order(int $order_id): void {
         '_mospal_subscription_delivery_time' => (string) $order->get_meta('_mospal_subscription_delivery_time'),
         '_mospal_subscription_style' => (string) $order->get_meta('_mospal_subscription_style'),
         '_mospal_subscription_cycle_start' => $cycle_start->format('Y-m-d'),
+        '_mospal_subscription_schedule' => (string) $order->get_meta('_mospal_subscription_schedule'),
     ];
     foreach (['birthday', 'anniversary'] as $field) {
         $value = (string) $order->get_meta('_mospal_subscription_' . $field);

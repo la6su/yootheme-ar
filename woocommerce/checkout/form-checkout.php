@@ -299,16 +299,59 @@ document.addEventListener("DOMContentLoaded", function () {
     // =========================
 
     if (typeof flatpickr !== "undefined") {
-        ["#delivery_date", "#mospal_subscription_first_delivery_date"].forEach(function(selector) {
-            if (document.querySelector(selector)) {
-                flatpickr(selector, { locale: "ru", dateFormat: "Y-m-d", minDate: "today" });
-            }
+        const regularDeliveryDate = document.querySelector("#delivery_date");
+        if (regularDeliveryDate) {
+            flatpickr(regularDeliveryDate, { locale: "ru", dateFormat: "Y-m-d", minDate: "today" });
+        }
+
+        const subscriptionDates = Array.from(document.querySelectorAll('[data-mospal-delivery-date]'));
+        const hasGeneratedDates = subscriptionDates.some(input => Number(input.dataset.offset || 0) > 0);
+
+        function formatLocalDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function fillGeneratedDates(baseDate) {
+            subscriptionDates.forEach(input => {
+                const offset = Number(input.dataset.offset || 0);
+                if (!offset || input.dataset.fixed === '1') return;
+
+                const date = new Date(baseDate.getTime());
+                if (input.dataset.offsetUnit === 'month') {
+                    date.setMonth(date.getMonth() + offset);
+                } else {
+                    date.setDate(date.getDate() + offset);
+                }
+                input._flatpickr?.setDate(formatLocalDate(date), false);
+            });
+        }
+
+        subscriptionDates.forEach(input => {
+            if (input.dataset.fixed === '1') return;
+
+            flatpickr(input, {
+                locale: "ru",
+                dateFormat: "Y-m-d",
+                minDate: "today",
+                onChange(selectedDates) {
+                    if (hasGeneratedDates && Number(input.dataset.offset || 0) === 0 && selectedDates[0]) {
+                        fillGeneratedDates(selectedDates[0]);
+                    }
+                }
+            });
         });
-        ["#mospal_subscription_birthday", "#mospal_subscription_anniversary"].forEach(function(selector) {
-            if (document.querySelector(selector)) {
-                flatpickr(selector, { locale: "ru", dateFormat: "Y-m-d", maxDate: "today" });
-            }
-        });
+
+        const subscriptionTimes = Array.from(document.querySelectorAll('[data-mospal-delivery-time]'));
+        if (subscriptionTimes.length > 1) {
+            subscriptionTimes[0].addEventListener('change', function() {
+                subscriptionTimes.slice(1).forEach(select => {
+                    if (!select.value) select.value = this.value;
+                });
+            });
+        }
     }
 
     // =========================
