@@ -272,6 +272,10 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        if (step === 0) {
+            jQuery(document.body).trigger('update_checkout');
+        }
+
         switcher.show(step + 1);
     }
 

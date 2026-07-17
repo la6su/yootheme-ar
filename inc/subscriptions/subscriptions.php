@@ -523,15 +523,15 @@ function mospal_subscription_create_delivery(int $subscription_id, int $order_id
 
 /** Orthodox Easter date in the Gregorian calendar. */
 function mospal_subscription_orthodox_easter(int $year): DateTimeImmutable {
-    $a = $year % 19;
+    $a = $year % 4;
     $b = $year % 7;
-    $c = $year % 4;
-    $d = (19 * $a + 15) % 30;
-    $e = (2 * $b + 4 * $c - $d + 34) % 7;
-    $month = intdiv($d + $e + 114, 31);
-    $day = (($d + $e + 114) % 31) + 1;
+    $c = $year % 19;
+    $d = (19 * $c + 15) % 30;
+    $e = (2 * $a + 4 * $b + 6 * $d + 6) % 7;
+    $days_after_march_22 = $d + $e;
 
-    return (new DateTimeImmutable(sprintf('%04d-%02d-%02d', $year, $month, $day), new DateTimeZone('UTC')))
+    return (new DateTimeImmutable(sprintf('%04d-03-22', $year), new DateTimeZone('UTC')))
+        ->modify('+' . $days_after_march_22 . ' days')
         ->modify('+13 days')
         ->setTimezone(wp_timezone());
 }

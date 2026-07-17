@@ -55,7 +55,7 @@ add_filter('woocommerce_checkout_fields', function($fields) {
         'type'     => 'select',
         'label'    => 'Зона доставки',
         'required' => true,
-        'class'    => ['form-row-wide'],
+        'class'    => ['form-row-wide', 'address-field', 'update_totals_on_change'],
         'default'  => 'mkad',
         'priority' => 120,
         'options'  => [
