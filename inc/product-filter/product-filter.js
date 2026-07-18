@@ -1,11 +1,11 @@
 let state = {
   filters: {},
   cache: {},
-  loading: false
+  loading: false,
+  controller: null
 };
 
 let debounceTimer;
-let isFirstLoad = true;
 
 // INIT
 document.addEventListener('DOMContentLoaded', initFilter);
@@ -19,11 +19,6 @@ function initFilter() {
   state.filters = getFiltersFromURL();
   syncUIWithState();
   bindEvents();
-
-  // не делаем AJAX если уже есть фильтр в URL
-  if (!window.location.search) {
-    runFilter();
-  }
 
 }
 
@@ -41,7 +36,7 @@ function bindEvents() {
       option.addEventListener('click', () => {
 
         const value = option.dataset.value;
-        const text = option.textContent;
+        const text = option.textContent.trim();
 
         // если клик по уже активному — снимаем фильтр
         if (state.filters[type] === value) {
@@ -58,8 +53,16 @@ function bindEvents() {
           button.textContent = text;
         }
 
+        delete state.filters.paged;
+        delete state.filters['product-page'];
+
         updateURL();
         debounce(runFilter, 250);
+
+        const dropdown = option.closest('[uk-dropdown]');
+        if (dropdown && window.UIkit) {
+          UIkit.dropdown(dropdown).hide(0);
+        }
 
       });
 
@@ -72,14 +75,16 @@ function bindEvents() {
 
 // FILTER
 function runFilter() {
-    if (isFirstLoad) {
-      isFirstLoad = false;
-      return;
-    }
   const container = document.getElementById('products-container');
+  if (!container) return;
 
   const params = new URLSearchParams(window.location.search);
   const cacheKey = params.toString();
+
+  if (state.controller) {
+    state.controller.abort();
+    state.controller = null;
+  }
 
   // CACHE
   if (state.cache[cacheKey]) {
@@ -88,9 +93,14 @@ function runFilter() {
   }
 
   setLoading(true);
+  const controller = new AbortController();
+  state.controller = controller;
 
   const data = new FormData();
   data.append('action', 'filter_products');
+  data.append('nonce', mospal.nonce);
+  data.append('context_taxonomy', mospal.contextTaxonomy || '');
+  data.append('context_term', mospal.contextTerm || '');
 
   // URL = источник правды
   params.forEach((value, key) => {
@@ -99,23 +109,28 @@ function runFilter() {
 
   fetch(mospal.ajaxurl, {
     method: 'POST',
-    body: data
+    body: data,
+    signal: controller.signal
   })
   .then(res => {
     if (!res.ok) throw new Error('Network error');
     return res.text();
   })
   .then(html => {
+    if (state.controller !== controller) return;
 
     state.cache[cacheKey] = html;
     animateSwap(container, html);
 
   })
   .catch(err => {
+    if (err.name === 'AbortError') return;
     console.error(err);
     showError(container);
   })
   .finally(() => {
+    if (state.controller !== controller) return;
+    state.controller = null;
     setLoading(false);
   });
 
@@ -124,6 +139,7 @@ function runFilter() {
 
 // ANIMATION
 function animateSwap(container, html) {
+  if (!container) return;
   container.innerHTML = html;
   // обновляем UIkit
   if (window.UIkit) {
@@ -223,6 +239,7 @@ function setLoading(flag) {
   state.loading = flag;
 
   const container = document.getElementById('products-container');
+  if (!container) return;
 
   if (flag) {
     container.classList.add('is-loading');

@@ -23,6 +23,12 @@ do_action( 'woocommerce_before_main_content' );
 do_action( 'woocommerce_shop_loop_header' );
 
 if ( woocommerce_product_loop() ) {
+	$flower_types = function_exists('mospal_product_filter_terms')
+		? mospal_product_filter_terms('pa_flower_type')
+		: [];
+	$colors = function_exists('mospal_product_filter_terms')
+		? mospal_product_filter_terms('pa_color')
+		: [];
 
 	/**
 	 * Hook: woocommerce_before_shop_loop.
@@ -35,10 +41,11 @@ if ( woocommerce_product_loop() ) {
 ?>
 <div id="catalog-filter" class="uk-grid-small uk-margin-bottom" uk-scrollspy="cls:uk-animation-fade" uk-grid>
 
-  <!-- Вид цветка -->
-  <div class="filter" data-filter="flower_type">
+  <?php if ($flower_types) : ?>
+    <!-- Вид цветка -->
+    <div class="filter" data-filter="flower_type">
 
-    <button class="filter-btn uk-button uk-button-small uk-button-default" type="button">
+    <button class="filter-btn uk-button uk-button-small uk-button-default" type="button" data-default="Все цветы">
       Все цветы
     </button>
 
@@ -51,27 +58,25 @@ if ( woocommerce_product_loop() ) {
           </button>
         </li>
 
-        <li>
-          <button type="button" class="uk-button uk-button-text" data-value="roses">
-            Розы
-          </button>
-        </li>
-
-        <li>
-          <button type="button" class="uk-button uk-button-text" data-value="peonies">
-            Пионы
-          </button>
-        </li>
+        <?php foreach ($flower_types as $flower_type) : ?>
+          <li>
+            <button type="button" class="uk-button uk-button-text" data-value="<?php echo esc_attr($flower_type->slug); ?>">
+              <?php echo esc_html($flower_type->name); ?>
+            </button>
+          </li>
+        <?php endforeach; ?>
 
       </ul>
     </div>
 
-  </div>
+    </div>
+  <?php endif; ?>
 
-  <!-- Цвет -->
-  <div class="filter" data-filter="color">
+  <?php if ($colors) : ?>
+    <!-- Цвет -->
+    <div class="filter" data-filter="color">
 
-    <button class="filter-btn uk-button uk-button-small uk-button-default" type="button">
+    <button class="filter-btn uk-button uk-button-small uk-button-default" type="button" data-default="Любой цвет">
       Любой цвет
     </button>
 
@@ -82,23 +87,24 @@ if ( woocommerce_product_loop() ) {
           <button type="button" class="uk-button uk-button-text" data-value="">Любой цвет</button>
         </li>
 
-        <li>
-          <button type="button" class="uk-button uk-button-text" data-value="red">Красный</button>
-        </li>
-
-        <li>
-          <button type="button" class="uk-button uk-button-text" data-value="white">Белый</button>
-        </li>
+        <?php foreach ($colors as $color) : ?>
+          <li>
+            <button type="button" class="uk-button uk-button-text" data-value="<?php echo esc_attr($color->slug); ?>">
+              <?php echo esc_html($color->name); ?>
+            </button>
+          </li>
+        <?php endforeach; ?>
 
       </ul>
     </div>
 
-  </div>
+    </div>
+  <?php endif; ?>
 
   <!-- Цена -->
   <div class="filter" data-filter="price">
 
-    <button class="filter-btn uk-button uk-button-small uk-button-default" type="button">
+    <button class="filter-btn uk-button uk-button-small uk-button-default" type="button" data-default="Любая цена">
       Любая цена
     </button>
 
@@ -118,7 +124,7 @@ if ( woocommerce_product_loop() ) {
         </li>
 
         <li>
-          <button type="button" class="uk-button uk-button-text" data-value="6000-10000">6000+</button>
+          <button type="button" class="uk-button uk-button-text" data-value="6000-">6000+</button>
         </li>
 
       </ul>
