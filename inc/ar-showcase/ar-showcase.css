@@ -1,0 +1,21 @@
+.mospal-ar-showcase {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    background: #f7f6f1;
+}
+
+.mospal-ar-showcase canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.mospal-ar-showcase__status {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: min(90%, 28rem);
+    margin: 0;
+    text-align: center;
+    transform: translate(-50%, -50%);
+}
