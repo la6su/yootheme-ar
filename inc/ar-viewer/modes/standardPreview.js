@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 import { createAnimationController } from '../core/animationController.js';
@@ -37,17 +36,12 @@ export async function createStandardPreview({
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
-    camera.position.set(-2, 2.5, 5);
+    const cameraTarget = new THREE.Vector3(0, 1.5, 0);
+    const cameraBasePosition = new THREE.Vector3(-2, 2.5, 5);
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.5, 0);
-    controls.minAzimuthAngle = -Math.PI / 6;
-    controls.maxAzimuthAngle = Math.PI / 6;
-    controls.minPolarAngle = Math.PI / 3;
-    controls.maxPolarAngle = Math.PI / 2.2;
-    controls.enablePan = false;
-    controls.enableZoom = false;
-    controls.update();
+    camera.position.copy(cameraBasePosition);
+    camera.lookAt(cameraTarget);
 
     addPreviewLights(scene);
 
@@ -98,7 +92,10 @@ export async function createStandardPreview({
 
         shader.update(elapsed, Math.min(elapsed / 1.8, 1), screenAspect);
         animationController.update(delta);
-        controls.update();
+        if (!reduceMotion) {
+            camera.position.x = cameraBasePosition.x + Math.sin(elapsed * 0.45) * 0.16;
+            camera.lookAt(cameraTarget);
+        }
         renderer.render(scene, camera);
     }
 
@@ -120,6 +117,8 @@ export async function createStandardPreview({
 
             running = true;
             elapsed = 0;
+            camera.position.copy(cameraBasePosition);
+            camera.lookAt(cameraTarget);
             resize();
             container.appendChild(renderer.domElement);
             animationController.playFromStart();
@@ -132,7 +131,6 @@ export async function createStandardPreview({
         destroy() {
             stop();
             animationController.destroy();
-            controls.dispose();
             disposeObject(model);
             texture.dispose();
             renderer.dispose();
